@@ -1,14 +1,14 @@
-import type { Metadata } from 'next';
+import '../globals.css';
 import { Inter } from 'next/font/google';
-import './globals.css';
 import { QueryProvider } from '@/providers/query-provider';
 import { AuthProvider } from '@/providers/auth-provider';
+import RouteGuard from '@/components/auth/route-guard';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'Glynac - Workplace Analytics Platform',
-  description: 'Gain powerful insights into your workplace dynamics and improve collaboration',
+  description: 'Advanced workplace analytics and collaboration insights',
 };
 
 export default function RootLayout({
@@ -21,14 +21,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <QueryProvider>
           <AuthProvider>
-            {children}
+            <RouteGuard>
+              {children}
+            </RouteGuard>
           </AuthProvider>
         </QueryProvider>
       </body>
     </html>
   );
 }
-
-
-
-
