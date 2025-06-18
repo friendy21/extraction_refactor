@@ -14,6 +14,8 @@ export default function EmployeesSetupPage() {
   const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
   const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [discoveryHasBeenRun, setDiscoveryHasBeenRun] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const employeesPerPage = 10;
   
   const router = useRouter();
   const { data: employeesData, isLoading, refetch } = useGetEmployees();
@@ -67,6 +69,17 @@ export default function EmployeesSetupPage() {
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredEmployees.length / employeesPerPage);
+  const startIndex = (currentPage - 1) * employeesPerPage;
+  const endIndex = startIndex + employeesPerPage;
+  const currentEmployees = filteredEmployees.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDepartment, selectedStatus]);
+
   const departments = Array.from(new Set(employees.map(emp => emp.department)));
   const stats = {
     total: employees.length,
@@ -104,7 +117,7 @@ export default function EmployeesSetupPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Employee Discovery</h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-gray-700 font-medium">
             Discover and manage employee data from your connected platforms.
           </p>
         </div>
@@ -113,8 +126,8 @@ export default function EmployeesSetupPage() {
         <div className="bg-white shadow rounded-lg p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Discover Employees</h2>
-              <p className="text-gray-600">Automatically detect and import employees from connected platforms.</p>
+              <h2 className="text-xl font-bold text-gray-900">Discover Employees</h2>
+              <p className="text-gray-700 font-medium">Automatically detect and import employees from connected platforms.</p>
             </div>
             <button
               onClick={handleRunDiscovery}
@@ -171,41 +184,41 @@ export default function EmployeesSetupPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-2">{stats.total}</div>
-                <div className="text-gray-600">Total Employees</div>
+                <div className="text-gray-800 font-semibold">Total Employees</div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-2">{stats.departments}</div>
-                <div className="text-gray-600">Departments</div>
+                <div className="text-gray-800 font-semibold">Departments</div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-2">{stats.locations}</div>
-                <div className="text-gray-600">Locations</div>
+                <div className="text-gray-800 font-semibold">Locations</div>
               </div>
               <div className="bg-white p-6 rounded-lg shadow text-center">
                 <div className="text-3xl font-bold text-blue-600 mb-2">{stats.remote}</div>
-                <div className="text-gray-600">Remote Workers</div>
+                <div className="text-gray-800 font-semibold">Remote Workers</div>
               </div>
             </div>
 
             {/* Department Distribution */}
             <div className="bg-white shadow rounded-lg p-6 mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Department Distribution</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Department Distribution</h3>
               <div className="space-y-4">
                 {departmentStats.map((dept) => (
                   <div key={dept.name} className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="w-4 h-4 bg-blue-500 rounded mr-3"></div>
-                      <span className="font-medium text-gray-900">{dept.name}</span>
+                      <span className="font-semibold text-gray-900">{dept.name}</span>
                     </div>
                     <div className="flex items-center space-x-4">
-                      <span className="text-gray-600">{dept.count} employees</span>
+                      <span className="text-gray-800 font-medium">{dept.count} employees</span>
                       <div className="w-32 bg-gray-200 rounded-full h-2">
                         <div 
                           className="bg-blue-500 h-2 rounded-full" 
                           style={{ width: `${dept.percentage}%` }}
                         ></div>
                       </div>
-                      <span className="text-sm text-gray-500 w-8">{dept.percentage}%</span>
+                      <span className="text-sm text-gray-700 w-8 font-medium">{dept.percentage}%</span>
                     </div>
                   </div>
                 ))}
@@ -216,10 +229,10 @@ export default function EmployeesSetupPage() {
             <div className="bg-white shadow rounded-lg">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Manage Employee List</h3>
+                  <h3 className="text-lg font-bold text-gray-900">Manage Employee List</h3>
                   <button
                     onClick={() => setShowAddEmployee(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center font-semibold"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -235,14 +248,14 @@ export default function EmployeesSetupPage() {
                     placeholder="Search by name, email, position..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <select
                     value={selectedDepartment}
                     onChange={(e) => setSelectedDepartment(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option>All Departments</option>
+                    <option value="All Departments">All Departments</option>
                     {departments.map(dept => (
                       <option key={dept} value={dept}>{dept}</option>
                     ))}
@@ -250,11 +263,11 @@ export default function EmployeesSetupPage() {
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option>All Status</option>
-                    <option>Included</option>
-                    <option>Excluded</option>
+                    <option value="All Status">All Status</option>
+                    <option value="Included">Included</option>
+                    <option value="Excluded">Excluded</option>
                   </select>
                 </div>
               </div>
@@ -264,31 +277,31 @@ export default function EmployeesSetupPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Email
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Department
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Position
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Location
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-800 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredEmployees.map((employee) => (
+                    {currentEmployees.map((employee) => (
                       <tr key={employee.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
@@ -296,11 +309,11 @@ export default function EmployeesSetupPage() {
                               {employee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                             </div>
                             <div className="ml-3">
-                              <div className="text-sm font-medium text-gray-900">{employee.name}</div>
+                              <div className="text-sm font-semibold text-gray-900">{employee.name}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {employee.email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -308,10 +321,10 @@ export default function EmployeesSetupPage() {
                             {employee.department}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {employee.position}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {employee.location}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -332,9 +345,9 @@ export default function EmployeesSetupPage() {
                             disabled={updateEmployeeMutation.isPending}
                             className={`${
                               employee.status === 'included'
-                                ? 'text-red-600 hover:text-red-900'
-                                : 'text-green-600 hover:text-green-900'
-                            } disabled:opacity-50`}
+                                ? 'text-red-700 hover:text-red-900'
+                                : 'text-green-700 hover:text-green-900'
+                            } disabled:opacity-50 font-semibold`}
                           >
                             {employee.status === 'included' ? 'Exclude' : 'Include'}
                           </button>
@@ -345,9 +358,72 @@ export default function EmployeesSetupPage() {
                 </table>
               </div>
 
+              {/* Pagination Footer */}
               <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <div className="text-sm text-gray-500">
-                  Showing {filteredEmployees.length} of {employees.length} employees
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-800 font-semibold">
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredEmployees.length)} of {filteredEmployees.length} employees
+                  </div>
+                  
+                  {totalPages > 1 && (
+                    <div className="flex items-center space-x-2">
+                      {/* Previous Button */}
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 text-sm font-semibold text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                          // Show first page, last page, current page, and pages around current page
+                          const showPage = pageNum === 1 || 
+                                          pageNum === totalPages || 
+                                          Math.abs(pageNum - currentPage) <= 1;
+                          
+                          // Show ellipsis
+                          const showEllipsis = (pageNum === 2 && currentPage > 4) || 
+                                              (pageNum === totalPages - 1 && currentPage < totalPages - 3);
+
+                          if (!showPage && !showEllipsis) return null;
+
+                          if (showEllipsis) {
+                            return (
+                              <span key={`ellipsis-${pageNum}`} className="px-2 py-2 text-sm text-gray-600 font-medium">
+                                ...
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`px-3 py-2 text-sm font-semibold rounded-md ${
+                                currentPage === pageNum
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-gray-800 bg-white border border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-2 text-sm font-semibold text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,4 +1,3 @@
-// components/auth/route-guard.tsx
 'use client';
 
 import React, { useEffect } from 'react';
