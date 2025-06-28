@@ -10,10 +10,13 @@ interface AvailablePlatformsProps {
   onDragStart: (platform: PlatformConfig) => void;
 }
 
-export default function AvailablePlatforms({ platforms, onDragStart }: AvailablePlatformsProps) {
+export default function AvailablePlatforms({ platforms = [], onDragStart }: AvailablePlatformsProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredPlatforms = platforms.filter(platform =>
+  // Guard clause to ensure platforms is always an array
+  const safePlatforms = Array.isArray(platforms) ? platforms : [];
+
+  const filteredPlatforms = safePlatforms.filter(platform =>
     platform.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     platform.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     platform.features.some(feature => 
@@ -88,7 +91,7 @@ export default function AvailablePlatforms({ platforms, onDragStart }: Available
         )}
 
         {/* All Connected Message */}
-        {platforms.length === 0 && (
+        {safePlatforms.length === 0 && (
           <div className="text-center py-8">
             <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,8 +110,8 @@ export default function AvailablePlatforms({ platforms, onDragStart }: Available
       <div className="mt-4 pt-4 border-t border-gray-200">
         <p className="text-sm text-gray-500">
           {searchTerm 
-            ? `${filteredPlatforms.length} of ${platforms.length} platforms`
-            : `${platforms.length} available platforms`
+            ? `${filteredPlatforms.length} of ${safePlatforms.length} platforms`
+            : `${safePlatforms.length} available platforms`
           }
         </p>
       </div>

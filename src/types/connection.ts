@@ -7,63 +7,60 @@ export interface PlatformConfig {
   features: string[];
   connected: boolean;
   connectionId?: string;
+  status?: 'disconnected' | 'configured' | 'connecting' | 'connected' | 'error';
+  configuredAt?: string;
+  connectedAt?: string;
+  lastError?: string;
 }
 
-export interface ConnectionConfig {
+export interface ConnectionConfiguration {
+  id?: string;
+  platformId: string;
   sourceName: string;
-  apiKey: string;
-  endpointUrl: string;
-  refreshInterval: string;
+  authMethod: 'oauth' | 'api_key' | 'service_account';
+  environment: 'production' | 'staging' | 'sandbox';
   dataTypes: string[];
-}
-
-export interface ConfigModal {
-  isOpen: boolean;
-  platform: PlatformConfig | null;
-}
-
-export interface DataSource {
-  id: string;
-  name: string;
-  type: string;
-  connected: boolean;
-  lastConnected?: string;
-  connectionId?: string;
-  config?: Partial<ConnectionConfig>;
-}
-
-export interface PlatformFeature {
-  id: string;
-  name: string;
-  icon: string;
-  description?: string;
-}
-
-// Platform-specific configurations
-export interface GoogleWorkspaceConfig extends ConnectionConfig {
-  scopes?: string[];
-  serviceAccountKey?: string;
-}
-
-export interface MicrosoftConfig extends ConnectionConfig {
-  tenantId?: string;
+  permissions: string[];
+  refreshInterval: string;
+  encryptionEnabled: boolean;
+  dataRetention: number;
+  
+  // OAuth specific
   clientId?: string;
-  clientSecret?: string;
+  tenantId?: string;
+  redirectUri?: string;
+  scopes?: string[];
+  
+  // API Key specific
+  apiKey?: string;
+  endpointUrl?: string;
+  
+  // Advanced settings
+  rateLimit?: number;
+  retryPolicy?: 'exponential' | 'linear' | 'none';
+  webhooksEnabled?: boolean;
+  webhookUrl?: string;
+  
+  createdAt?: string;
+  updatedAt?: string;
+  status: 'draft' | 'configured' | 'active' | 'error';
 }
 
-export interface JiraConfig extends ConnectionConfig {
-  projectKeys?: string[];
-  issueTypes?: string[];
-  customFields?: string[];
-}
-
-export interface AsanaConfig extends ConnectionConfig {
-  workspaceId?: string;
-  projectIds?: string[];
-}
-
-export interface SlackConfig extends ConnectionConfig {
-  workspaceUrl?: string;
-  botToken?: string;
-  channels?: string[];
+export interface ConnectionStatus {
+  id: string;
+  platformId: string;
+  status: 'connecting' | 'connected' | 'error' | 'disconnected';
+  lastConnected?: string;
+  lastError?: string;
+  dataCollected?: {
+    emails?: number;
+    meetings?: number;
+    files?: number;
+    messages?: number;
+  };
+  healthCheck?: {
+    status: 'healthy' | 'warning' | 'error';
+    lastCheck: string;
+    details?: string;
+  };
 }

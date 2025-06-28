@@ -1,19 +1,26 @@
 // hooks/use-connection-state.ts
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useConnectDataSource, useDisconnectDataSource } from '@/hooks/api';
 import { PlatformConfig, ConfigModal } from '@/types/connection';
 import { platformsData } from '@/data/platforms-data';
 
 export function useConnectionState() {
-  const [platforms, setPlatforms] = useState<PlatformConfig[]>(platformsData);
+  const [platforms, setPlatforms] = useState<PlatformConfig[]>([]);
   const [connectedSources, setConnectedSources] = useState<PlatformConfig[]>([]);
   const [draggedPlatform, setDraggedPlatform] = useState<PlatformConfig | null>(null);
   const [configModal, setConfigModal] = useState<ConfigModal>({ isOpen: false, platform: null });
 
   const connectMutation = useConnectDataSource();
   const disconnectMutation = useDisconnectDataSource();
+
+  // Initialize platforms data on mount
+  useEffect(() => {
+    if (Array.isArray(platformsData)) {
+      setPlatforms(platformsData);
+    }
+  }, []);
 
   const handleDragStart = (platform: PlatformConfig) => {
     setDraggedPlatform(platform);
@@ -31,6 +38,7 @@ export function useConnectionState() {
 
   const closeConfigModal = () => {
     setConfigModal({ isOpen: false, platform: null });
+    setDraggedPlatform(null);
   };
 
   const handleConnect = async (config: any) => {

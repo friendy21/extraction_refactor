@@ -13,6 +13,7 @@ import {
   ApiResponse,
   DashboardStats 
 } from '@/types';
+import { PlatformConfig } from '@/types/connection';
 
 // Authentication hooks
 export const useLogin = () => {
@@ -81,12 +82,22 @@ export const useGetOrganization = () => {
   });
 };
 
-// Data source hooks
-export const useGetDataSources = () => {
+// Platform and Data source hooks
+export const useGetAvailablePlatforms = () => {
   return useQuery({
-    queryKey: ['data-sources'],
-    queryFn: async (): Promise<ApiResponse<DataSource[]>> => {
-      const response = await api.get('/data-sources');
+    queryKey: ['available-platforms'],
+    queryFn: async (): Promise<ApiResponse<PlatformConfig[]>> => {
+      const response = await api.get('/platforms/available');
+      return response.data;
+    },
+  });
+};
+
+export const useGetConnectedSources = () => {
+  return useQuery({
+    queryKey: ['connected-sources'],
+    queryFn: async (): Promise<ApiResponse<PlatformConfig[]>> => {
+      const response = await api.get('/platforms/connected');
       return response.data;
     },
   });
@@ -97,11 +108,12 @@ export const useConnectDataSource = () => {
   
   return useMutation({
     mutationFn: async (data: { type: string; config: any }): Promise<ApiResponse<DataSource>> => {
-      const response = await api.post('/data-sources/connect', data);
+      const response = await api.post('/platforms/connect', data);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+      queryClient.invalidateQueries({ queryKey: ['available-platforms'] });
+      queryClient.invalidateQueries({ queryKey: ['connected-sources'] });
     },
   });
 };
@@ -111,11 +123,12 @@ export const useDisconnectDataSource = () => {
   
   return useMutation({
     mutationFn: async (sourceId: string): Promise<ApiResponse<void>> => {
-      const response = await api.delete(`/data-sources/${sourceId}`);
+      const response = await api.delete(`/platforms/${sourceId}/disconnect`);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+      queryClient.invalidateQueries({ queryKey: ['available-platforms'] });
+      queryClient.invalidateQueries({ queryKey: ['connected-sources'] });
     },
   });
 };

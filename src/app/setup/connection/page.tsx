@@ -43,6 +43,25 @@ export default function ConnectionSetupPage() {
     setDraggedPlatform(null);
   };
 
+  // Show loading state while platforms are initializing
+  if (!platforms && !connectedSources) {
+    return (
+      <SetupLayout>
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Data Source Connection</h1>
+            <p className="text-lg text-gray-600">
+              Connect to your workplace platforms to collect data for analysis.
+            </p>
+          </div>
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </SetupLayout>
+    );
+  }
+
   return (
     <SetupLayout>
       <div className="max-w-7xl mx-auto">
@@ -56,13 +75,13 @@ export default function ConnectionSetupPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[600px]">
           {/* Available Platforms */}
           <AvailablePlatforms 
-            platforms={platforms}
+            platforms={platforms || []}
             onDragStart={handleDragStart}
           />
 
           {/* Data Sources */}
           <DataSourcesPanel
-            connectedSources={connectedSources}
+            connectedSources={connectedSources || []}
             onDragOver={handleDragOver}
             onDrop={handleDropWrapper}
             onDisconnect={handleDisconnect}
