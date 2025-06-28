@@ -40,10 +40,13 @@ export interface Employee {
   position: string;
   location: string;
   status: 'included' | 'excluded';
-  emailCount?: number;
-  chatCount?: number;
-  meetingCount?: number;
-  fileAccessCount?: number;
+  workModel: string;
+  age: string;
+  gender: string;
+  ethnicity: string;
+  language: string;
+  timezone: string;
+  include: boolean;
 }
 
 export interface DataQualityIssue {

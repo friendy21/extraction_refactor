@@ -1,558 +1,330 @@
 // src/lib/api-client.ts
-import { API_CONFIG } from './api-config';
-import type {
-  BaseApiResponse,
-  PaginationParams,
-  UserExtractionConfig,
-  UserExtractionStatus,
-  UserExtractionResult,
-  CalendarConfig,
-  CalendarResult,
-  TeamsConfig,
-  TeamsStatus,
-  ChatMessage,
-  PersonalChatMessage,
-  Team,
-  OneDriveConfig,
-  OneDriveStatus,
-  Document,
-  Activity,
-  OutlookConfig,
-  OutlookBatchStatus,
-  EmailMessage,
-  SharePointConfig,
-  SharePointStatus,
-  SharePointItem,
-  ServiceHealth,
-  ExtractionStatus
-} from '@/types/api';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { ApiResponse } from '@/types';
 
-class ApiClient {
-  private async request<T>(
-    baseUrl: string,
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${baseUrl}${endpoint}`;
+/**
+ * API Client configuration interface
+ */
+export interface ApiClientConfig {
+  baseURL?: string;
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+}
+
+/**
+ * Professional API Client with comprehensive error handling,
+ * authentication, retry logic, and type safety
+ */
+export class ApiClient {
+  private axios: AxiosInstance;
+  private retries: number;
+  private retryDelay: number;
+
+  constructor(config: ApiClientConfig = {}) {
+    this.retries = config.retries || 3;
+    this.retryDelay = config.retryDelay || 1000;
+
+    this.axios = axios.create({
+      baseURL: config.baseURL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api',
+      timeout: config.timeout || 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    this.setupInterceptors();
+  }
+
+  /**
+   * Setup request and response interceptors
+   */
+  private setupInterceptors(): void {
+    // Request interceptor for authentication
+    this.axios.interceptors.request.use(
+      (config) => {
+        // Add auth token if available
+        if (typeof window !== 'undefined') {
+          const token = localStorage.getItem('auth_token');
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
+        }
+
+        // Add request timestamp for debugging
+        config.metadata = { startTime: new Date() };
+        
+        return config;
+      },
+      (error) => {
+        console.error('Request interceptor error:', error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Response interceptor for error handling and logging
+    this.axios.interceptors.response.use(
+      (response: AxiosResponse) => {
+        // Log response time in development
+        if (process.env.NODE_ENV === 'development' && response.config.metadata) {
+          const endTime = new Date();
+          const duration = endTime.getTime() - response.config.metadata.startTime.getTime();
+          console.log(`API Request: ${response.config.method?.toUpperCase()} ${response.config.url} - ${duration}ms`);
+        }
+
+        return response;
+      },
+      async (error) => {
+        const originalRequest = error.config;
+
+        // Handle 401 Unauthorized
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          this.handleUnauthorized();
+          return Promise.reject(error);
+        }
+
+        // Handle retry logic for 5xx errors and network errors
+        if (this.shouldRetry(error) && !originalRequest._retry) {
+          return this.retryRequest(originalRequest);
+        }
+
+        // Enhanced error logging
+        this.logError(error);
+
+        return Promise.reject(this.normalizeError(error));
+      }
+    );
+  }
+
+  /**
+   * Determine if request should be retried
+   */
+  private shouldRetry(error: any): boolean {
+    // Don't retry client errors (4xx) except for specific cases
+    if (error.response?.status >= 400 && error.response?.status < 500) {
+      // Retry on rate limiting (429) and request timeout (408)
+      return error.response.status === 429 || error.response.status === 408;
+    }
+
+    // Retry on server errors (5xx) and network errors
+    return (
+      !error.response || // Network error
+      error.response.status >= 500 || // Server error
+      error.code === 'ECONNABORTED' || // Timeout
+      error.code === 'NETWORK_ERROR'
+    );
+  }
+
+  /**
+   * Retry failed requests with exponential backoff
+   */
+  private async retryRequest(originalRequest: any): Promise<AxiosResponse> {
+    originalRequest._retry = true;
+    originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+
+    if (originalRequest._retryCount > this.retries) {
+      throw new Error(`Request failed after ${this.retries} retries`);
+    }
+
+    // Exponential backoff
+    const delay = this.retryDelay * Math.pow(2, originalRequest._retryCount - 1);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    console.warn(`Retrying request (${originalRequest._retryCount}/${this.retries}):`, originalRequest.url);
     
-    const defaultHeaders = {
-      'Content-Type': 'application/json',
-      ...options.headers,
+    return this.axios(originalRequest);
+  }
+
+  /**
+   * Handle unauthorized access
+   */
+  private handleUnauthorized(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user_data');
+      
+      // Only redirect if not already on login page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+  }
+
+  /**
+   * Log errors for debugging and monitoring
+   */
+  private logError(error: any): void {
+    const errorInfo = {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      method: error.config?.method,
+      data: error.response?.data,
+      timestamp: new Date().toISOString(),
     };
 
+    console.error('API Error:', errorInfo);
+
+    // In production, you might want to send this to a monitoring service
+    if (process.env.NODE_ENV === 'production') {
+      // Send to monitoring service (e.g., Sentry, LogRocket, etc.)
+      // monitoringService.captureException(error, { extra: errorInfo });
+    }
+  }
+
+  /**
+   * Normalize error response to consistent format
+   */
+  private normalizeError(error: any): ApiError {
+    return {
+      message: error.response?.data?.message || error.message || 'An unexpected error occurred',
+      status: error.response?.status || 0,
+      code: error.response?.data?.code || error.code || 'UNKNOWN_ERROR',
+      details: error.response?.data?.details || null,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Generic request method with type safety
+   */
+  async request<T = any>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: defaultHeaders,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || 
-          errorData.error || 
-          `HTTP ${response.status}: ${response.statusText}`
-        );
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`API request failed: ${url}`, error);
+      const response = await this.axios(config);
+      return {
+        success: true,
+        data: response.data.data || response.data,
+        message: response.data.message,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
       throw error;
     }
   }
 
-  // ===========================================
-  // Microsoft User Extraction Service
-  // ===========================================
-  
-  async getUserExtractionHealth(): Promise<ServiceHealth> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      API_CONFIG.ENDPOINTS.USER.HEALTH
-    );
+  /**
+   * GET request
+   */
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'GET', url });
   }
 
-  async startUserExtraction(
-    connectionId: string,
-    config: UserExtractionConfig
-  ): Promise<BaseApiResponse & { connection_id: string; status: string }> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      `${API_CONFIG.ENDPOINTS.USER.START}/${connectionId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(config),
-      }
-    );
+  /**
+   * POST request
+   */
+  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'POST', url, data });
   }
 
-  async getUserExtractionStatus(connectionId: string): Promise<UserExtractionStatus> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      `${API_CONFIG.ENDPOINTS.USER.STATUS}/${connectionId}`
-    );
+  /**
+   * PUT request
+   */
+  async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'PUT', url, data });
   }
 
-  async getUserExtractionResult(connectionId: string): Promise<UserExtractionResult> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      `${API_CONFIG.ENDPOINTS.USER.RESULT}/${connectionId}`
-    );
+  /**
+   * PATCH request
+   */
+  async patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'PATCH', url, data });
   }
 
-  async deleteUserExtraction(connectionId: string): Promise<BaseApiResponse> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      `${API_CONFIG.ENDPOINTS.USER.DELETE}/${connectionId}`,
-      { method: 'DELETE' }
-    );
+  /**
+   * DELETE request
+   */
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'DELETE', url });
   }
 
-  async listUserExtractions(): Promise<{
-    total: number;
-    extractions: Array<ExtractionStatus & { user_count: number }>;
-  }> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      API_CONFIG.ENDPOINTS.USER.LIST
-    );
-  }
-
-  async getUserExtractionStatistics(): Promise<{
-    extractions: {
-      total: number;
-      completed: number;
-      failed: number;
-      in_progress: number;
-    };
-    users: { total: number };
-    active_extractions: number;
-    timestamp: string;
-  }> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      API_CONFIG.ENDPOINTS.USER.STATISTICS
-    );
-  }
-
-  async cleanupUserExtractions(daysOld: number = 30): Promise<{
-    message: string;
-    deleted_extractions: number;
-    days_old: number;
-  }> {
-    return this.request(
-      API_CONFIG.USER_EXTRACTION,
-      `${API_CONFIG.ENDPOINTS.USER.CLEANUP}?days_old=${daysOld}`,
-      { method: 'POST' }
-    );
-  }
-
-  // ===========================================
-  // Calendar Activity Service
-  // ===========================================
-
-  async getCalendarHealth(): Promise<ServiceHealth> {
-    return this.request(
-      API_CONFIG.CALENDAR_ACTIVITY,
-      API_CONFIG.ENDPOINTS.CALENDAR.HEALTH
-    );
-  }
-
-  async startCalendarExtraction(
-    connectionId: string,
-    config: CalendarConfig
-  ): Promise<BaseApiResponse & { connection_id: string; status: string }> {
-    return this.request(
-      API_CONFIG.CALENDAR_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.CALENDAR.START}/${connectionId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(config),
-      }
-    );
-  }
-
-  async getCalendarStatus(connectionId: string): Promise<{
-    id: string;
-    connection_id: string;
-    status: string;
-    started_at?: string;
-    completed_at?: string;
-    error_message?: string;
-    created_at: string;
-    updated_at: string;
-  }> {
-    return this.request(
-      API_CONFIG.CALENDAR_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.CALENDAR.STATUS}/${connectionId}`
-    );
-  }
-
-  async getCalendarResult(
-    connectionId: string,
-    params?: PaginationParams
-  ): Promise<CalendarResult> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+  /**
+   * Upload file with progress tracking
+   */
+  async upload<T = any>(
+    url: string, 
+    file: File, 
+    onProgress?: (progress: number) => void,
+    additionalData?: Record<string, any>
+  ): Promise<ApiResponse<T>> {
+    const formData = new FormData();
+    formData.append('file', file);
     
-    const endpoint = `${API_CONFIG.ENDPOINTS.CALENDAR.RESULT}/${connectionId}${
-      queryParams.toString() ? `?${queryParams}` : ''
-    }`;
-    
-    return this.request(API_CONFIG.CALENDAR_ACTIVITY, endpoint);
-  }
-
-  // ===========================================
-  // Teams Chat Service
-  // ===========================================
-
-  async getTeamsHealth(): Promise<ServiceHealth> {
-    return this.request(
-      API_CONFIG.TEAMS_CHAT,
-      API_CONFIG.ENDPOINTS.TEAMS.HEALTH
-    );
-  }
-
-  async startTeamsExtraction(
-    connectionId: string,
-    config: TeamsConfig
-  ): Promise<BaseApiResponse & { connection_id: string; status: string; user_count: number }> {
-    return this.request(
-      API_CONFIG.TEAMS_CHAT,
-      `${API_CONFIG.ENDPOINTS.TEAMS.START}/${connectionId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(config),
-      }
-    );
-  }
-
-  async getTeamsStatus(connectionId: string): Promise<TeamsStatus> {
-    return this.request(
-      API_CONFIG.TEAMS_CHAT,
-      `${API_CONFIG.ENDPOINTS.TEAMS.STATUS}/${connectionId}`
-    );
-  }
-
-  async getTeamsMessages(
-    connectionId: string,
-    params?: PaginationParams
-  ): Promise<{
-    connection_id: string;
-    page: number;
-    page_size: number;
-    total_count: number;
-    total_pages: number;
-    messages: ChatMessage[];
-  }> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
-    
-    const endpoint = API_CONFIG.ENDPOINTS.TEAMS.MESSAGES
-      .replace('{connection_id}', connectionId) +
-      (queryParams.toString() ? `?${queryParams}` : '');
-    
-    return this.request(API_CONFIG.TEAMS_CHAT, endpoint);
-  }
-
-  async getTeamsPersonalMessages(
-    connectionId: string,
-    params?: PaginationParams & { user_upn?: string }
-  ): Promise<{
-    connection_id: string;
-    page: number;
-    page_size: number;
-    total_count: number;
-    total_pages: number;
-    user_upn?: string;
-    messages: PersonalChatMessage[];
-  }> {
-    const queryParams = new URLSearchParams();
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
-    if (params?.user_upn) queryParams.append('user_upn', params.user_upn);
-    
-    const endpoint = API_CONFIG.ENDPOINTS.TEAMS.PERSONAL_MESSAGES
-      .replace('{connection_id}', connectionId) +
-      (queryParams.toString() ? `?${queryParams}` : '');
-    
-    return this.request(API_CONFIG.TEAMS_CHAT, endpoint);
-  }
-
-  async getTeamsAndChannels(connectionId: string): Promise<{
-    connection_id: string;
-    total_teams: number;
-    teams: Team[];
-  }> {
-    const endpoint = API_CONFIG.ENDPOINTS.TEAMS.TEAMS_CHANNELS
-      .replace('{connection_id}', connectionId);
-    
-    return this.request(API_CONFIG.TEAMS_CHAT, endpoint);
-  }
-
-  // ===========================================
-  // OneDrive Activity Service
-  // ===========================================
-
-  async getOneDriveHealth(): Promise<ServiceHealth> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      API_CONFIG.ENDPOINTS.ONEDRIVE.HEALTH
-    );
-  }
-
-  async checkOneDriveScan(connectionId: string): Promise<OneDriveStatus & { exists: boolean }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.CHECK}/${connectionId}`
-    );
-  }
-
-  async startOneDriveExtraction(config: OneDriveConfig): Promise<{
-    message: string;
-    connection_id: string;
-    status: string;
-    user_count: number;
-    endpoints: {
-      check_status: string;
-      get_activities: string;
-      get_results: string;
-    };
-  }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      API_CONFIG.ENDPOINTS.ONEDRIVE.START,
-      {
-        method: 'POST',
-        body: JSON.stringify(config),
-      }
-    );
-  }
-
-  async resumeOneDriveScan(connectionId: string): Promise<{
-    message: string;
-    connection_id: string;
-    status: string;
-    previous_status: string;
-    user_count: number;
-  }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.RESUME}/${connectionId}`,
-      { method: 'POST' }
-    );
-  }
-
-  async restartOneDriveScan(
-    connectionId: string,
-    config: OneDriveConfig
-  ): Promise<{
-    message: string;
-    connection_id: string;
-    status: string;
-    previous_status: string;
-    user_count: number;
-  }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.RESTART}/${connectionId}`,
-      {
-        method: 'POST',
-        body: JSON.stringify(config),
-      }
-    );
-  }
-
-  async getOneDriveStatus(connectionId: string): Promise<OneDriveStatus> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.STATUS}/${connectionId}`
-    );
-  }
-
-  async getOneDriveResult(connectionId: string): Promise<{
-    connection_id: string;
-    document_count: number;
-    documents: Document[];
-  }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.RESULT}/${connectionId}`
-    );
-  }
-
-  async getOneDriveActivities(connectionId: string): Promise<{
-    connection_id: string;
-    activity_count: number;
-    activities: Activity[];
-  }> {
-    const endpoint = API_CONFIG.ENDPOINTS.ONEDRIVE.ACTIVITIES
-      .replace('{connection_id}', connectionId);
-    
-    return this.request(API_CONFIG.ONEDRIVE_ACTIVITY, endpoint);
-  }
-
-  async deleteOneDriveScan(connectionId: string): Promise<{
-    message: string;
-    removed_scan: {
-      connection_id: string;
-      previous_status: string;
-      had_results: boolean;
-    };
-  }> {
-    return this.request(
-      API_CONFIG.ONEDRIVE_ACTIVITY,
-      `${API_CONFIG.ENDPOINTS.ONEDRIVE.DELETE}/${connectionId}`,
-      { method: 'DELETE' }
-    );
-  }
-
-  // ===========================================
-  // Outlook Mail Service
-  // ===========================================
-
-  async startOutlookBatchExtraction(
-    batchTaskId: string,
-    config: OutlookConfig
-  ): Promise<{
-    batch_task_id: string;
-    started_at: string;
-    success: boolean;
-    message: string;
-  }> {
-    return this.request(
-      API_CONFIG.OUTLOOK_MAIL,
-      API_CONFIG.ENDPOINTS.OUTLOOK.START,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          batch_task_id: batchTaskId,
-          ...config,
-        }),
-      }
-    );
-  }
-
-  async getOutlookBatchStatus(batchTaskId: string): Promise<OutlookBatchStatus> {
-    return this.request(
-      API_CONFIG.OUTLOOK_MAIL,
-      `${API_CONFIG.ENDPOINTS.OUTLOOK.STATUS}/${batchTaskId}`
-    );
-  }
-
-  async getOutlookEmails(
-    userUpn: string,
-    params?: {
-      limit?: number;
-      offset?: number;
-      folder_name?: 'inbox' | 'sent' | 'both';
-      is_read?: boolean;
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
     }
-  ): Promise<EmailMessage[]> {
-    const queryParams = new URLSearchParams({ user_upn: userUpn });
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.offset) queryParams.append('offset', params.offset.toString());
-    if (params?.folder_name) queryParams.append('folder_name', params.folder_name);
-    if (params?.is_read !== undefined) queryParams.append('is_read', params.is_read.toString());
-    
-    return this.request(
-      API_CONFIG.OUTLOOK_MAIL,
-      `${API_CONFIG.ENDPOINTS.OUTLOOK.RESULT}?${queryParams}`
-    );
-  }
 
-  // ===========================================
-  // SharePoint Service
-  // ===========================================
-
-  async getSharePointHealth(): Promise<ServiceHealth> {
-    return this.request(
-      API_CONFIG.SHAREPOINT,
-      API_CONFIG.ENDPOINTS.SHAREPOINT.HEALTH
-    );
-  }
-
-  async startSharePointExtraction(
-    connectionId: string,
-    config: SharePointConfig
-  ): Promise<{
-    connection_id: string;
-    status: string;
-    message: string;
-  }> {
-    return this.request(
-      API_CONFIG.SHAREPOINT,
-      API_CONFIG.ENDPOINTS.SHAREPOINT.START,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          connection_id: connectionId,
-          config,
-        }),
-      }
-    );
-  }
-
-  async getSharePointStatus(connectionId: string): Promise<SharePointStatus> {
-    return this.request(
-      API_CONFIG.SHAREPOINT,
-      `${API_CONFIG.ENDPOINTS.SHAREPOINT.STATUS}/${connectionId}`
-    );
-  }
-
-  async getSharePointResult(connectionId: string): Promise<{
-    connectionId: string;
-    extracted_data: SharePointItem[];
-  }> {
-    return this.request(
-      API_CONFIG.SHAREPOINT,
-      `${API_CONFIG.ENDPOINTS.SHAREPOINT.RESULT}/${connectionId}`
-    );
-  }
-
-  async deleteSharePointScan(connectionId: string): Promise<void> {
-    return this.request(
-      API_CONFIG.SHAREPOINT,
-      `${API_CONFIG.ENDPOINTS.SHAREPOINT.DELETE}/${connectionId}`,
-      { method: 'DELETE' }
-    );
-  }
-
-  // ===========================================
-  // Health Check for All Services
-  // ===========================================
-
-  async getAllServicesHealth(): Promise<Record<string, ServiceHealth>> {
-    const services = [
-      { name: 'user', method: () => this.getUserExtractionHealth() },
-      { name: 'calendar', method: () => this.getCalendarHealth() },
-      { name: 'teams', method: () => this.getTeamsHealth() },
-      { name: 'onedrive', method: () => this.getOneDriveHealth() },
-      { name: 'sharepoint', method: () => this.getSharePointHealth() },
-    ];
-
-    const results: Record<string, ServiceHealth> = {};
-
-    await Promise.allSettled(
-      services.map(async (service) => {
-        try {
-          results[service.name] = await service.method();
-        } catch (error) {
-          results[service.name] = {
-            status: 'unhealthy',
-            service: service.name,
-            timestamp: new Date().toISOString(),
-            error: error instanceof Error ? error.message : 'Unknown error',
-          };
+    return this.request<T>({
+      method: 'POST',
+      url,
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(progress);
         }
-      })
-    );
+      },
+    });
+  }
 
-    return results;
+  /**
+   * Update authentication token
+   */
+  setAuthToken(token: string | null): void {
+    if (token) {
+      this.axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('auth_token', token);
+      }
+    } else {
+      delete this.axios.defaults.headers.common['Authorization'];
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+      }
+    }
+  }
+
+  /**
+   * Get current base URL
+   */
+  getBaseURL(): string {
+    return this.axios.defaults.baseURL || '';
+  }
+
+  /**
+   * Update base URL
+   */
+  setBaseURL(baseURL: string): void {
+    this.axios.defaults.baseURL = baseURL;
   }
 }
 
-export const apiClient = new ApiClient();
+/**
+ * API Error interface
+ */
+export interface ApiError {
+  message: string;
+  status: number;
+  code: string;
+  details?: any;
+  timestamp: string;
+}
+
+/**
+ * Create singleton instance
+ */
+export const apiClient = new ApiClient({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  timeout: 30000,
+  retries: 3,
+  retryDelay: 1000,
+});
+
+// Export default instance
+export default apiClient;
