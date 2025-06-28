@@ -1,3 +1,4 @@
+// app/api/employees/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 // Mock employees data
@@ -131,4 +132,15 @@ export async function POST(request: NextRequest) {
       error: 'Failed to create employee',
     }, { status: 500 });
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }
