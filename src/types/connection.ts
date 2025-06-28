@@ -45,7 +45,10 @@ export interface ConnectionConfiguration {
   updatedAt?: string;
   status: 'draft' | 'configured' | 'active' | 'error';
 }
-
+export interface ConfigModal {
+  isOpen: boolean;
+  platform: PlatformConfig | null;
+}
 export interface ConnectionStatus {
   id: string;
   platformId: string;
