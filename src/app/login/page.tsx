@@ -7,7 +7,7 @@ import { useAuth } from '@/providers/auth-provider';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: ''
   });
   const [showDemo, setShowDemo] = useState(false);
@@ -50,9 +50,10 @@ export default function LoginPage() {
 
   const handleDemoLogin = () => {
     setFormData({
-      email: 'admin123@glynac.ai',
+      username: 'admin123',
       password: 'admin123'
     });
+    setShowDemo(true);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,13 +80,13 @@ export default function LoginPage() {
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
                 required
-                placeholder="name@example.com"
-                value={formData.email}
+                placeholder="admin123"
+                value={formData.username}
                 onChange={handleChange}
                 className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
               />
@@ -136,7 +137,7 @@ export default function LoginPage() {
               
               {showDemo && (
                 <div className="mt-3 text-xs text-gray-600 space-y-1">
-                  <div><strong>Email:</strong> admin123@glynac.ai</div>
+                  <div><strong>Username:</strong> admin123</div>
                   <div><strong>Password:</strong> admin123</div>
                 </div>
               )}
